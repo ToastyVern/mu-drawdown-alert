@@ -1,0 +1,58 @@
+name: MU drawdown alert
+
+on:
+  schedule:
+    - cron: "*/20 13-21 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      test_price:
+        description: "Force a price to test the alert path (leave blank for live)"
+        required: false
+        default: ""
+
+concurrency:
+  group: mu-alert
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check MU against drawdown levels
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          TEST_PRICE: ${{ github.event.inputs.test_price }}
+          FORCE_RUN: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+        run: python check_mu.py
+
+      - name: Persist state / keep the schedule alive
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name  "mu-alert-bot"
+          git config user.email "actions@github.com"
+          if [[ -n "$(git status --porcelain state.json)" ]]; then
+            git add state.json
+            git commit -m "state: $(date -u +%Y-%m-%dT%H:%MZ)"
+          else
+            last=$(git log -1 --format=%ct)
+            age=$(( ( $(date +%s) - last ) / 86400 ))
+            if (( age >= 20 )); then
+              date -u +%Y-%m-%dT%H:%MZ > .heartbeat
+              git add .heartbeat
+              git commit -m "heartbeat: keep schedule alive"
+            else
+              echo "state unchanged, nothing to push"
+              exit 0
+            fi
+          fi
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
+          git push
