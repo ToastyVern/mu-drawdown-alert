@@ -25,6 +25,7 @@ Env:
   FORCE_RUN=1         optional, skip the market-hours guard
 """
 
+import copy
 import json
 import os
 import smtplib
@@ -170,12 +171,17 @@ def send_push(title: str, body: str) -> bool:
     topic = os.environ.get("NTFY_TOPIC")
     if not topic:
         return False
+    # HTTP header values must be latin-1 encodable. A stray non-ASCII character
+    # in the title (an em dash, a curly quote) would otherwise raise and kill
+    # the only alert channel, so strip the header to plain ASCII. The body is
+    # sent as UTF-8 and is not subject to this.
+    safe_title = title.encode("ascii", "replace").decode("ascii")
     try:
         req = urllib.request.Request(
             f"https://ntfy.sh/{topic}",
-            data=body.encode(),
+            data=body.encode("utf-8"),
             headers={
-                "Title": title,
+                "Title": safe_title,
                 "Priority": "urgent",
                 "Tags": "chart_with_downwards_trend",
                 "User-Agent": UA,
@@ -208,7 +214,10 @@ def main() -> int:
     state = {}
     if STATE_PATH.exists():
         state = json.loads(STATE_PATH.read_text())
-    breached = state.get("breached", {})
+    # Snapshot before mutating, so the "did anything change" test below is not
+    # comparing a dict against itself.
+    previous = copy.deepcopy(state.get("breached", {}))
+    breached = copy.deepcopy(previous)
 
     fired, still_breached, recovered, standing = [], [], [], []
 
@@ -264,23 +273,30 @@ def main() -> int:
         ]
         body = "\n".join(lines)
         names = ", ".join(n for n, *_ in fired)
-        subject = f"MU ALERT: {price:,.2f} — {cfg['drop_pct']:.0f}% trigger hit ({names})"
+        subject = f"MU ALERT: {price:,.2f}, {cfg['drop_pct']:.0f}% trigger hit ({names})"
 
         print("\n" + body + "\n")
         ok_mail = send_email(subject, body)
-        ok_push = send_push(f"MU {price:,.2f} — trigger hit", body)
+        ok_push = send_push(f"MU {price:,.2f}: trigger hit", body)
 
         if not (ok_mail or ok_push):
-            log("NO ALERT CHANNEL SUCCEEDED — not saving state, will retry next run")
+            log("NO ALERT CHANNEL SUCCEEDED, not saving state, will retry next run")
             return 1
 
-    state["breached"] = breached
-    state["last_check"] = {
-        "utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "price": round(price, 4),
-        "source": source,
-    }
-    STATE_PATH.write_text(json.dumps(state, indent=2) + "\n")
+    # Only rewrite state when the breached set actually changed. Writing a
+    # timestamp every run would produce a commit every 20 minutes.
+    if breached != previous:
+        state["breached"] = breached
+        state["last_change"] = {
+            "utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "price": round(price, 4),
+            "source": source,
+        }
+        STATE_PATH.write_text(json.dumps(state, indent=2) + "\n")
+        log("state updated")
+    else:
+        log("state unchanged")
+
     log("done")
     return 0
 
