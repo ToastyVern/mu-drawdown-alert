@@ -1,0 +1,11 @@
+{
+  "ticker": "MU",
+  "tv_symbol": "NASDAQ:MU",
+  "drop_pct": 10.0,
+  "rearm_buffer_pct": 2.0,
+  "accounts": [
+    { "name": "GardenView", "reference_level": 1042.92 },
+    { "name": "The AMC",    "reference_level": 1039.00 },
+    { "name": "Flex",       "reference_level": 1037.07 }
+  ]
+}
