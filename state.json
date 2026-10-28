@@ -1,26 +1,13 @@
 {
-  "breached": {
-    "GardenView": {
-      "at": "2026-10-14T13:41:32-04:00",
-      "price": 925.3
-    },
-    "The AMC": {
-      "at": "2026-10-14T13:41:32-04:00",
-      "price": 925.3
-    },
-    "Flex": {
-      "at": "2026-10-14T13:41:32-04:00",
-      "price": 925.3
-    }
-  },
+  "breached": {},
   "last_check": {
     "utc": "2026-09-14T08:29:22+00:00",
     "price": 975.26,
     "source": "TradingView (15-min delayed)"
   },
   "last_change": {
-    "utc": "2026-10-14T17:41:33+00:00",
-    "price": 925.3,
+    "utc": "2026-10-28T18:34:46+00:00",
+    "price": 968.06,
     "source": "TradingView (15-min delayed)"
   }
 }
